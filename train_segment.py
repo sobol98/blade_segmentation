@@ -44,15 +44,15 @@ id2label = {
 def get_transform(train=False):
     transforms = []
     transforms.append(T.ToTensor())
-    if train:
-        transforms.extend([
-            T.RandomHorizontalFlip(0.2),
-            T.RandomVerticalFlip(0.2),
-            T.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
-            T.RandomRotation(degrees=(0, 180)),
-            T.RandomAffine(degrees=0, shear=(10, 10)),
-            T.RandomPerspective(distortion_scale=0.5, p=0.5),
-        ])
+    # if train:
+    #     transforms.extend([
+    #         T.RandomHorizontalFlip(0.2),
+    #         T.RandomVerticalFlip(0.2),
+    #         T.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
+    #         T.RandomRotation(degrees=(0, 180)),
+    #         T.RandomAffine(degrees=0, shear=(10, 10)),
+    #         T.RandomPerspective(distortion_scale=0.5, p=0.5),
+    #     ])
     return T.Compose(transforms)
 
 
@@ -72,7 +72,7 @@ class SegmentationDataset(Dataset):
         self.image_dirs_all = [os.path.join(self.image_dir, x) for x in self.image_blade_dir]
 
         for file in self.image_dirs_all:
-            if (file == './datasets/blade/train/Blade_4' or file == './datasets/blade/val/Blade_2'):  # smaller dataset  #if you want use full comment this line
+            # if (file == './datasets/blade/train/Blade_4' or file == './datasets/blade/val/Blade_2'):  # smaller dataset  #if you want use full comment this line
                 for blade in os.listdir(file):
                     if blade.endswith('jpg'):
                         self.images.append(os.path.join(file, blade))
@@ -159,13 +159,25 @@ class LinearClassifier(torch.nn.Module):
         self.in_channels = in_channels
         self.width = tokenW
         self.height = tokenH
-        self.classifier = torch.nn.Conv2d(in_channels, num_labels, (1,1))
+       # self.classifier = torch.nn.Conv2d(in_channels, num_labels, (1,1))
+        # Dodanie dodatkowych warstw konwolucyjnych
+        self.conv1 = torch.nn.Conv2d(in_channels, in_channels // 2, kernel_size=3, padding=1)
+        self.bn1 = torch.nn.BatchNorm2d(in_channels // 2)  # Dodanie Batch Normalization
+        self.act1 = torch.nn.LeakyReLU()  # Zmiana funkcji aktywacji na LeakyReLU
+
+        self.conv2 = torch.nn.Conv2d(in_channels // 2, num_labels, kernel_size=3, padding=1)
+        self.bn2 = torch.nn.BatchNorm2d(num_labels)
 
     def forward(self, embeddings):
         embeddings = embeddings.reshape(-1, self.height, self.width, self.in_channels)
         embeddings = embeddings.permute(0,3,1,2)
 
-        return self.classifier(embeddings)
+        # Przechodzenie przez warstwy
+        x = self.act1(self.bn1(self.conv1(embeddings)))
+        x = self.bn2(self.conv2(x))
+
+        return x
+        # return self.classifier(embeddings)
 
 
 class Dinov2ForSemanticSegmentation(Dinov2PreTrainedModel):
@@ -194,7 +206,8 @@ class Dinov2ForSemanticSegmentation(Dinov2PreTrainedModel):
         if labels is not None:
             # important: we're going to use 0 here as ignore index instead of the default -100
             # as we don't want the model to learn to predict background
-            loss_fct = torch.nn.CrossEntropyLoss(ignore_index=0)
+            # loss_fct = torch.nn.CrossEntropyLoss(ignore_index=0)
+            loss_fct = torch.nn.CrossEntropyLoss()
             loss = loss_fct(logits.squeeze(), labels.squeeze())
 
         return SemanticSegmenterOutput(
@@ -326,10 +339,10 @@ def evaluate_model(model, val_dataloader, device, num_labels, save_path):
     print(f'Average F1 Score for class 1: {average_f1}')
     print(f'Average IoU for class 1: {average_iou}')
 
-    # wandb.log({"Average IoU": average_iou,
-    #            "Average F1": average_f1,
-    #            "Average Precision": average_precision,
-    #            "Average Recall": average_recall})
+    wandb.log({"Average IoU": average_iou,
+               "Average F1": average_f1,
+               "Average Precision": average_precision,
+               "Average Recall": average_recall})
 
 
     return average_iou, f1_scores, prediction, recalls
@@ -341,7 +354,7 @@ def evaluate_model(model, val_dataloader, device, num_labels, save_path):
 learning_rate = 0.0005
 epochs = 5
 
-run_number = 1
+run_number = 3
 
 # # # ---------------------------------
 # wandb.init(project="blade_segmentation",entity='s176164')
