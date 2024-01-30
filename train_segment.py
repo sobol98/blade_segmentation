@@ -112,9 +112,41 @@ class SegmentationDataset(Dataset):
             img=functional.rotate(img,angle)
             mask=functional.rotate(mask,angle)
 
+        if random.random() > 0.5:
+            img = functional.adjust_brightness(img, brightness_factor=random.uniform(0.5, 1.5))
+            img = functional.adjust_contrast(img, contrast_factor=random.uniform(0.5, 1.5))
+            img = functional.adjust_saturation(img, saturation_factor=random.uniform(0.5, 1.5))
+            img = functional.adjust_hue(img, hue_factor=random.uniform(-0.1, 0.1))
+
+        if random.random() > 0.5:
+            img = functional.hflip(img)
+            mask = functional.hflip(mask)
+
+        if random.random() > 0.5:
+            startpoints, endpoints = self.get_perspective_points(img.size)
+            img = functional.perspective(img, startpoints, endpoints)
+            mask = functional.perspective(mask, startpoints, endpoints)
+
         img = self.transforms(img)
         mask = self.transforms(mask)
         return img, mask
+
+    def get_perspective_points(self, size):
+        width, height = size
+        # Define the degree of perspective change
+        shift_max = min(width, height) * 0.2  # 20% of the smaller dimension
+        # Define four points in the image from which to infer the perspective transform
+        top_left = (random.uniform(-shift_max, shift_max), random.uniform(-shift_max, shift_max))
+        top_right = (width - random.uniform(-shift_max, shift_max), random.uniform(-shift_max, shift_max))
+        bottom_left = (random.uniform(-shift_max, shift_max), height - random.uniform(-shift_max, shift_max))
+        bottom_right = (width - random.uniform(-shift_max, shift_max), height - random.uniform(-shift_max, shift_max))
+
+        startpoints = [top_left, top_right, bottom_left, bottom_right]
+        endpoints = [(0, 0), (width, 0), (0, height), (width, height)]
+
+        return startpoints, endpoints
+
+
 src_dataset_root = './datasets/'
 train_dataset = SegmentationDataset(src_dataset_root, "blade","train", get_transform())
 val_dataset = SegmentationDataset(src_dataset_root, "blade", "val", get_transform())
@@ -217,8 +249,8 @@ class Dinov2ForSemanticSegmentation(Dinov2PreTrainedModel):
 
 model = Dinov2ForSemanticSegmentation.from_pretrained("facebook/dinov2-base", id2label=id2label,num_labels=len(id2label))
 
-model_path='/home/student/ml/to_send/model_epoch_75.pth'
-model.load_state_dict(torch.load(model_path))
+# model_path='/home/student/ml/to_send/model_epoch_75.pth'
+# model.load_state_dict(torch.load(model_path))
 
 
 
