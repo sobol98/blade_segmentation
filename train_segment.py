@@ -65,7 +65,7 @@ class SegmentationDataset(Dataset):
         self.image_dirs_all = [os.path.join(self.image_dir, x) for x in self.image_blade_dir]
 
         for file in self.image_dirs_all:
-            # if (file == './datasets/blade/train/Blade_4' or file == './datasets/blade/val/Blade_2'):  # smaller dataset  #if you want use full comment this line
+            if (file == './datasets/blade/train/Blade_4' or file == './datasets/blade/val/Blade_2'):  # smaller dataset  #if you want use full comment this line
                 for blade in os.listdir(file):
                     if blade.endswith('jpg'):
                         self.images.append(os.path.join(file, blade))
@@ -80,7 +80,7 @@ class SegmentationDataset(Dataset):
         mask = Image.open(self.annotations[index]).convert('L')
 
         if self.transforms is not None:
-            img, mask = self.apply_transforms(img, mask)
+            img, mask = self.apply_transform(img, mask)
 
 
         img = self.resize_img_to_shape(img, (280, 280))
@@ -217,6 +217,11 @@ class Dinov2ForSemanticSegmentation(Dinov2PreTrainedModel):
 
 model = Dinov2ForSemanticSegmentation.from_pretrained("facebook/dinov2-base", id2label=id2label,num_labels=len(id2label))
 
+model_path='/home/student/ml/to_send/model_epoch_75.pth'
+model.load_state_dict(torch.load(model_path))
+
+
+
 # print model layers
 for name, param in model.named_parameters():
     # print in two columns
@@ -352,7 +357,7 @@ def evaluate_model(model, val_dataloader, device, num_labels, save_path):
 learning_rate = 0.0005
 epochs = 50
 
-run_number = 4
+run_number = 5
 
 # # # ---------------------------------
 wandb.init(project="blade_segmentation",entity='s176164')
