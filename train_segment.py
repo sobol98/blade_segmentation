@@ -14,6 +14,8 @@ import torchvision.transforms.functional as TF
 import numpy as np
 from torch.utils.data import DataLoader
 import wandb
+from torchvision.transforms import functional
+
 
 ## ---------------
 # test
@@ -41,18 +43,9 @@ id2label = {
     1: "blade"
 }
 
-def get_transform(train=False):
+def get_transform():
     transforms = []
     transforms.append(T.ToTensor())
-    # if train:
-    #     transforms.extend([
-    #         T.RandomHorizontalFlip(0.2),
-    #         T.RandomVerticalFlip(0.2),
-    #         T.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
-    #         T.RandomRotation(degrees=(0, 180)),
-    #         T.RandomAffine(degrees=0, shear=(10, 10)),
-    #         T.RandomPerspective(distortion_scale=0.5, p=0.5),
-    #     ])
     return T.Compose(transforms)
 
 
@@ -87,9 +80,8 @@ class SegmentationDataset(Dataset):
         mask = Image.open(self.annotations[index]).convert('L')
 
         if self.transforms is not None:
-            img = self.transforms(img)
-            # img=self.augment_colors(img)
-            mask = self.transforms(mask)
+            img, mask = self.apply_transforms(img, mask)
+
 
         img = self.resize_img_to_shape(img, (280, 280))
         mask = self.resize_mask_to_shape(mask, (280, 280))
@@ -114,11 +106,17 @@ class SegmentationDataset(Dataset):
         mask = torchvision.transforms.Resize((desired_shape[0], desired_shape[1]))(mask)
         return mask
 
+    def apply_transform(self,img,mask):
+        if random.random()>0.5:
+            angle=random.uniform(0,100)
+            img=functional.rotate(img,angle)
+            mask=functional.rotate(mask,angle)
 
-
-
+        img = self.transforms(img)
+        mask = self.transforms(mask)
+        return img, mask
 src_dataset_root = './datasets/'
-train_dataset = SegmentationDataset(src_dataset_root, "blade","train", get_transform(True))
+train_dataset = SegmentationDataset(src_dataset_root, "blade","train", get_transform())
 val_dataset = SegmentationDataset(src_dataset_root, "blade", "val", get_transform())
 
 print("train_dataset shape: ", train_dataset.__len__())
@@ -352,18 +350,18 @@ def evaluate_model(model, val_dataloader, device, num_labels, save_path):
 
 
 learning_rate = 0.0005
-epochs = 5
+epochs = 50
 
-run_number = 3
+run_number = 4
 
 # # # ---------------------------------
-# wandb.init(project="blade_segmentation",entity='s176164')
-#
-# # Konfiguracja hiperparametrów
-# config = wandb.config
-# config.learning_rate = learning_rate
-# config.epochs = epochs
-# config.batch_size = batchSize
+wandb.init(project="blade_segmentation",entity='s176164')
+
+# Konfiguracja hiperparametrów
+config = wandb.config
+config.learning_rate = learning_rate
+config.epochs = epochs
+config.batch_size = batchSize
 
 # ---------------------------------
 
@@ -386,7 +384,7 @@ for epoch in range(epochs):
         optimizer.zero_grad()
     #
     #
-    # wandb.log({"Train Loss": loss.item()})
+    wandb.log({"Train Loss": loss.item()})
     lr_scheduler.step()
 
     save_path = f'outputs/runs_{run_number}/saved_predictions_epoch_{epoch}'
@@ -395,6 +393,7 @@ for epoch in range(epochs):
 
     evaluate_model(model, val_dataloader, device, 2, save_path)
 
-    # torch.save(model.state_dict(), f'{save_path}/model_epoch_{epoch}.pth')
+    if epoch % 5 == 0:
+        torch.save(model.state_dict(), f'{save_path}/model_epoch_{epoch}.pth')
 
-# wandb.finish()
+wandb.finish()
